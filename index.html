@@ -1,0 +1,688 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>InvoiceZero — 免费无水印多币种商业发票与报价单生成器 (A4 PDF)</title>
+  <meta name="description" content="100% 浏览器本地运行的免费无水印商业发票与报价单生成器。支持中英双语、USDT/USD/CNY/EUR 多币种、自动税费折扣计算与高清 A4 PDF 导出，零注册零追踪。" />
+  <style>
+    :root {
+      --bg: #0f172a;
+      --panel: #1e293b;
+      --border: #334155;
+      --text: #e2e8f0;
+      --muted: #94a3b8;
+      --accent: #38bdf8;
+      --accent-2: #22c55e;
+      --danger: #f87171;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+    }
+    header {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 12px 20px;
+      background: #0b1220;
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      z-index: 20;
+    }
+    .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 17px; }
+    .badge { font-size: 11px; padding: 2px 8px; border-radius: 999px; background: rgba(34,197,94,0.15); color: #4ade80; border: 1px solid rgba(34,197,94,0.35); }
+    .actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    button, select, input, textarea {
+      font-family: inherit;
+      font-size: 13px;
+    }
+    .btn {
+      padding: 7px 13px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--panel);
+      color: var(--text);
+      cursor: pointer;
+      transition: 0.15s;
+    }
+    .btn:hover { border-color: var(--accent); color: #fff; }
+    .btn-primary { background: #0284c7; border-color: #0284c7; color: #fff; font-weight: 600; }
+    .btn-primary:hover { background: #0369a1; }
+    .btn-tip { background: linear-gradient(135deg, #16a34a, #0ea5e9); border: none; color: #fff; font-weight: 600; }
+    .btn-tip:hover { opacity: 0.92; }
+
+    .workspace {
+      display: grid;
+      grid-template-columns: 440px 1fr;
+      min-height: calc(100vh - 58px);
+    }
+    @media (max-width: 1080px) {
+      .workspace { grid-template-columns: 1fr; }
+    }
+    .editor {
+      padding: 18px;
+      border-right: 1px solid var(--border);
+      overflow-y: auto;
+      max-height: calc(100vh - 58px);
+      background: #111827;
+    }
+    @media (max-width: 1080px) {
+      .editor { max-height: none; border-right: none; border-bottom: 1px solid var(--border); }
+    }
+    .section {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 13px;
+      margin-bottom: 14px;
+    }
+    .section h3 {
+      margin: 0 0 10px;
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--accent);
+    }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px; }
+    .field label { font-size: 12px; color: var(--muted); }
+    .field input, .field select, .field textarea {
+      width: 100%;
+      padding: 7px 9px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: #0f172a;
+      color: var(--text);
+    }
+    .field textarea { resize: vertical; min-height: 54px; }
+
+    .item-row {
+      display: grid;
+      grid-template-columns: 1fr 56px 84px 28px;
+      gap: 6px;
+      margin-bottom: 6px;
+      align-items: center;
+    }
+    .item-row input {
+      padding: 6px 7px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: #0f172a;
+      color: var(--text);
+      width: 100%;
+    }
+    .del-btn {
+      background: transparent;
+      border: 1px solid rgba(248,113,113,0.4);
+      color: var(--danger);
+      border-radius: 6px;
+      height: 30px;
+      cursor: pointer;
+    }
+
+    .preview-pane {
+      padding: 24px;
+      background: #1e293b;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 18px;
+    }
+
+    /* A4 Sheet */
+    .sheet {
+      width: 210mm;
+      min-height: 297mm;
+      background: #ffffff;
+      color: #0f172a;
+      padding: 18mm 18mm 16mm;
+      border-radius: 4px;
+      box-shadow: 0 18px 45px rgba(0, 0, 0, 0.45);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+    @media (max-width: 900px) {
+      .sheet { width: 100%; min-height: auto; padding: 20px; }
+    }
+    .inv-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      border-bottom: 2px solid #0f172a;
+      padding-bottom: 14px;
+      margin-bottom: 18px;
+    }
+    .inv-title { font-size: 28px; font-weight: 800; letter-spacing: 1px; color: #0f172a; margin: 0; }
+    .inv-meta { text-align: right; font-size: 13px; color: #334155; }
+    .inv-meta div { margin-bottom: 3px; }
+    .parties {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+      margin-bottom: 22px;
+      font-size: 13px;
+    }
+    .party-label { font-size: 11px; font-weight: 700; text-transform: uppercase; color: #64748b; margin-bottom: 4px; letter-spacing: 0.6px; }
+    .party-name { font-size: 16px; font-weight: 700; color: #0f172a; margin-bottom: 4px; }
+    .party-info { white-space: pre-line; color: #334155; }
+
+    table.inv-table { width: 100%; border-collapse: collapse; margin-bottom: 18px; font-size: 13px; }
+    table.inv-table th {
+      text-align: left;
+      padding: 9px 10px;
+      background: #f1f5f9;
+      border-top: 1px solid #cbd5e1;
+      border-bottom: 1px solid #cbd5e1;
+      color: #0f172a;
+      font-weight: 700;
+    }
+    table.inv-table td {
+      padding: 10px;
+      border-bottom: 1px solid #e2e8f0;
+      vertical-align: top;
+    }
+    .num { text-align: right !important; white-space: nowrap; }
+
+    .totals-wrap { display: flex; justify-content: flex-end; margin-bottom: 22px; }
+    .totals { width: 270px; font-size: 13px; }
+    .totals .t-row { display: flex; justify-content: space-between; padding: 5px 0; color: #334155; }
+    .totals .t-grand {
+      display: flex;
+      justify-content: space-between;
+      padding: 10px 0 6px;
+      margin-top: 6px;
+      border-top: 2px solid #0f172a;
+      font-size: 17px;
+      font-weight: 800;
+      color: #0f172a;
+    }
+
+    .payment-box {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      padding: 12px 14px;
+      font-size: 12.5px;
+      color: #334155;
+      margin-bottom: 14px;
+    }
+    .payment-box strong { color: #0f172a; display: block; margin-bottom: 4px; }
+    .payment-text { white-space: pre-line; word-break: break-all; }
+    .notes-box { font-size: 12px; color: #64748b; white-space: pre-line; }
+
+    .suite-footer {
+      width: 100%;
+      max-width: 210mm;
+      text-align: center;
+      font-size: 12.5px;
+      color: var(--muted);
+      padding-bottom: 12px;
+    }
+    .suite-footer a { color: var(--accent); text-decoration: none; margin: 0 6px; }
+    .suite-footer a:hover { text-decoration: underline; }
+
+    dialog#tipDialog {
+      background: #0f172a;
+      color: #e2e8f0;
+      border: 1px solid #334155;
+      border-radius: 14px;
+      max-width: 560px;
+      width: 92vw;
+      padding: 20px;
+      box-shadow: 0 24px 60px rgba(0,0,0,0.65);
+    }
+    dialog::backdrop { background: rgba(2, 6, 23, 0.72); backdrop-filter: blur(3px); }
+    .qr-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 14px 0; }
+    .qr-card { background: #1e293b; border: 1px solid #334155; border-radius: 10px; padding: 10px; text-align: center; }
+    .qr-card img { width: 100%; max-width: 180px; border-radius: 8px; background: #fff; padding: 4px; }
+    .addr-box {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 8px;
+      padding: 9px 10px;
+      margin-top: 8px;
+      font-size: 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      word-break: break-all;
+    }
+
+    @media print {
+      @page { size: A4; margin: 0; }
+      body { background: #fff; }
+      header, .editor, .suite-footer, dialog { display: none !important; }
+      .workspace { display: block; }
+      .preview-pane { padding: 0; background: #fff; display: block; }
+      .sheet { box-shadow: none; border-radius: 0; width: 210mm; min-height: 297mm; margin: 0; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <span>🧾 InvoiceZero</span>
+      <span class="badge">100% 本地 · 免费无水印</span>
+    </div>
+    <div class="actions">
+      <button class="btn" id="btnLang">切换 English / 中文</button>
+      <button class="btn" id="btnExportJson">导出 JSON</button>
+      <button class="btn" id="btnImportJson">导入 JSON</button>
+      <input type="file" id="jsonFile" accept=".json" hidden />
+      <button class="btn btn-primary" onclick="window.print()">📄 导出无水印 A4 PDF</button>
+      <button class="btn btn-tip" id="btnOpenTip">☕ 赞赏支持 (微信/支付宝/USDT)</button>
+    </div>
+  </header>
+
+  <main class="workspace">
+    <aside class="editor">
+      <div class="section">
+        <h3>单据设置 / Document</h3>
+        <div class="grid-2">
+          <div class="field">
+            <label>单据类型</label>
+            <select id="docType">
+              <option value="INVOICE">INVOICE / 商业发票</option>
+              <option value="QUOTATION">QUOTATION / 报价单</option>
+              <option value="RECEIPT">RECEIPT / 收款收据</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>结算币种</label>
+            <select id="currency">
+              <option value="USDT">USDT (Tether)</option>
+              <option value="USD">USD ($)</option>
+              <option value="CNY">CNY (¥)</option>
+              <option value="EUR">EUR (€)</option>
+              <option value="GBP">GBP (£)</option>
+              <option value="USDC">USDC</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>单据编号 #</label>
+            <input id="invNo" />
+          </div>
+          <div class="field">
+            <label>开具日期</label>
+            <input type="date" id="issueDate" />
+          </div>
+          <div class="field">
+            <label>到期日期</label>
+            <input type="date" id="dueDate" />
+          </div>
+          <div class="field">
+            <label>税率 (%)</label>
+            <input type="number" id="taxRate" step="0.1" min="0" />
+          </div>
+        </div>
+        <div class="field">
+          <label>折扣金额 (Discount)</label>
+          <input type="number" id="discount" step="0.01" min="0" />
+        </div>
+      </div>
+
+      <div class="section">
+        <h3>收款方 / From</h3>
+        <div class="field"><label>公司或个人名称</label><input id="fromName" /></div>
+        <div class="field"><label>邮箱 / 网站 / 地址</label><textarea id="fromInfo"></textarea></div>
+      </div>
+
+      <div class="section">
+        <h3>付款方 / Bill To</h3>
+        <div class="field"><label>客户名称</label><input id="toName" /></div>
+        <div class="field"><label>客户邮箱 / 地址</label><textarea id="toInfo"></textarea></div>
+      </div>
+
+      <div class="section">
+        <h3>明细项目 / Line Items</h3>
+        <div id="itemsContainer"></div>
+        <button class="btn" id="btnAddItem" style="width:100%;margin-top:6px;">+ 添加明细行</button>
+      </div>
+
+      <div class="section">
+        <h3>收款方式与备注 / Payment & Notes</h3>
+        <div class="field"><label>收款信息（USDT 钱包 / 银行账户 / 支付宝等）</label><textarea id="paymentInfo"></textarea></div>
+        <div class="field"><label>补充条款 / 备注</label><textarea id="notes"></textarea></div>
+      </div>
+    </aside>
+
+    <section class="preview-pane">
+      <article class="sheet" id="sheet">
+        <div>
+          <div class="inv-head">
+            <div>
+              <h1 class="inv-title" id="pDocType">INVOICE</h1>
+              <div style="font-size:13px;color:#64748b;margin-top:4px;" id="pSubtitle">Commercial Invoice</div>
+            </div>
+            <div class="inv-meta">
+              <div><strong id="lblNo">Invoice #</strong>: <span id="pInvNo"></span></div>
+              <div><strong id="lblDate">Date</strong>: <span id="pIssueDate"></span></div>
+              <div><strong id="lblDue">Due Date</strong>: <span id="pDueDate"></span></div>
+            </div>
+          </div>
+
+          <div class="parties">
+            <div>
+              <div class="party-label" id="lblFrom">FROM</div>
+              <div class="party-name" id="pFromName"></div>
+              <div class="party-info" id="pFromInfo"></div>
+            </div>
+            <div>
+              <div class="party-label" id="lblTo">BILL TO</div>
+              <div class="party-name" id="pToName"></div>
+              <div class="party-info" id="pToInfo"></div>
+            </div>
+          </div>
+
+          <table class="inv-table">
+            <thead>
+              <tr>
+                <th id="thDesc">Description</th>
+                <th class="num" style="width:70px;" id="thQty">Qty</th>
+                <th class="num" style="width:115px;" id="thRate">Unit Price</th>
+                <th class="num" style="width:125px;" id="thAmt">Amount</th>
+              </tr>
+            </thead>
+            <tbody id="pItems"></tbody>
+          </table>
+
+          <div class="totals-wrap">
+            <div class="totals">
+              <div class="t-row"><span id="lblSub">Subtotal</span><span id="pSub"></span></div>
+              <div class="t-row" id="rowTax"><span id="lblTax">Tax</span><span id="pTax"></span></div>
+              <div class="t-row" id="rowDisc"><span id="lblDisc">Discount</span><span id="pDisc"></span></div>
+              <div class="t-grand"><span id="lblTotal">Total Due</span><span id="pTotal"></span></div>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div class="payment-box">
+            <strong id="lblPay">Payment Details</strong>
+            <div class="payment-text" id="pPayment"></div>
+          </div>
+          <div class="notes-box" id="pNotes"></div>
+        </div>
+      </article>
+
+      <footer class="suite-footer">
+        Zero-Tracking 免费工具矩阵：
+        <a href="https://devbox-zero-ops.github.io/devbox-zero/" target="_blank">DevBox Zero (开发者工具箱)</a> ·
+        <a href="https://devbox-zero-ops.github.io/resumemd-zero/" target="_blank">ResumeMD Zero (无水印简历)</a> ·
+        <a href="https://devbox-zero-ops.github.io/chaincalc-zero/" target="_blank">ChainCalc Zero (DeFi 计算器)</a> ·
+        <a href="https://github.com/devbox-zero-ops/wallet-watch-cli" target="_blank">wallet-watch-cli</a>
+      </footer>
+    </section>
+  </main>
+
+  <dialog id="tipDialog">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+      <strong style="font-size:16px;">☕ 支持 InvoiceZero 持续免费无水印</strong>
+      <button class="btn" onclick="document.getElementById('tipDialog').close()">关闭</button>
+    </div>
+    <p style="font-size:13px;color:#94a3b8;margin:0 0 10px;">
+      本工具 100% 浏览器本地运行、绝不上传客户商业数据、永久无水印导出 PDF。如果它帮你顺利收款，欢迎随手请杯咖啡：
+    </p>
+    <div class="qr-grid">
+      <div class="qr-card">
+        <div style="font-size:13px;font-weight:600;margin-bottom:6px;color:#4ade80;">微信赞赏</div>
+        <img src="assets/wechat-pay.jpg" alt="微信收款码" />
+      </div>
+      <div class="qr-card">
+        <div style="font-size:13px;font-weight:600;margin-bottom:6px;color:#38bdf8;">支付宝赞赏</div>
+        <img src="assets/alipay.jpg" alt="支付宝收款码" />
+      </div>
+    </div>
+    <div class="addr-box">
+      <span><strong>EVM USDT</strong> (Arbitrum/Polygon/ETH/BSC，兼容 USDC):<br/><code>0xe4c8739bCC488bD98978CE976511735e0499d432</code></span>
+      <button class="btn" onclick="copyText('0xe4c8739bCC488bD98978CE976511735e0499d432', this)">复制</button>
+    </div>
+    <div class="addr-box">
+      <span><strong>Solana USDT</strong> (兼容 SOL/USDC):<br/><code>89XqpaJDKajhYFs4Vmex853yxoEU7HqwnMAPtTDpgZgG</code></span>
+      <button class="btn" onclick="copyText('89XqpaJDKajhYFs4Vmex853yxoEU7HqwnMAPtTDpgZgG', this)">复制</button>
+    </div>
+  </dialog>
+
+  <script>
+    const STORAGE_KEY = "invoicezero_v1_state";
+    const today = new Date().toISOString().slice(0, 10);
+    const due = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
+
+    const DEFAULTS = {
+      en: {
+        lang: "en",
+        docType: "INVOICE",
+        currency: "USDT",
+        invNo: "INV-2026-001",
+        issueDate: today,
+        dueDate: due,
+        taxRate: 0,
+        discount: 0,
+        fromName: "Zero Studio / Freelance Dev",
+        fromInfo: "hello@example.com\nhttps://github.com/devbox-zero-ops",
+        toName: "Acme Client Ltd.",
+        toInfo: "billing@acme-client.com\n123 Market St, San Francisco, CA",
+        items: [
+          { desc: "Full-Stack Web Application Development (Milestone 1)", qty: 1, rate: 1200 },
+          { desc: "Performance Optimization & Automated Test Suite", qty: 4, rate: 85 }
+        ],
+        paymentInfo: "USDT (Arbitrum / Polygon / Ethereum): 0xYourWalletAddressHere\nUSDT (Solana): YourSolanaWalletAddressHere\nWise / Wire Transfer available upon request.",
+        notes: "Thank you for your business! Please include the Invoice # in your transfer memo."
+      },
+      zh: {
+        lang: "zh",
+        docType: "INVOICE",
+        currency: "CNY",
+        invNo: "INV-2026-001",
+        issueDate: today,
+        dueDate: due,
+        taxRate: 0,
+        discount: 0,
+        fromName: "独立开发工作室",
+        fromInfo: "邮箱：contact@example.com\n主页：https://github.com/devbox-zero-ops",
+        toName: "示例客户科技有限公司",
+        toInfo: "财务邮箱：finance@client.com\n上海市浦东新区软件园 88 号",
+        items: [
+          { desc: "前端页面与交互系统开发（第一阶段交付）", qty: 1, rate: 6800 },
+          { desc: "自动化部署脚本与技术文档交付", qty: 1, rate: 1200 }
+        ],
+        paymentInfo: "收款方式：对公转账 / 支付宝 / 微信 / USDT (Arbitrum 或 Solana)\n收款账号：请在左侧编辑区填写您的收款信息",
+        notes: "感谢您的信任与合作！付款时请备注本单据编号以便核销。"
+      }
+    };
+
+    const LABELS = {
+      en: {
+        no: "Invoice #", date: "Issue Date", due: "Due Date", from: "FROM", to: "BILL TO",
+        desc: "Description", qty: "Qty", rate: "Unit Price", amt: "Amount",
+        sub: "Subtotal", tax: "Tax", disc: "Discount", total: "Total Due", pay: "Payment Details",
+        subtitles: { INVOICE: "Commercial Invoice", QUOTATION: "Project Quotation", RECEIPT: "Payment Receipt" }
+      },
+      zh: {
+        no: "单据编号", date: "开具日期", due: "到期日期", from: "收款方 / FROM", to: "付款方 / BILL TO",
+        desc: "项目明细", qty: "数量", rate: "单价", amt: "小计",
+        sub: "小计", tax: "税费", disc: "折扣", total: "应付总额", pay: "收款方式 / Payment Details",
+        subtitles: { INVOICE: "商业发票 / Commercial Invoice", QUOTATION: "项目报价单 / Quotation", RECEIPT: "收款收据 / Receipt" }
+      }
+    };
+
+    let state = (() => {
+      try {
+        const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
+        if (saved && Array.isArray(saved.items)) return saved;
+      } catch {}
+      return structuredClone(DEFAULTS.en);
+    })();
+
+    const el = (id) => document.getElementById(id);
+    const fields = ["docType", "currency", "invNo", "issueDate", "dueDate", "taxRate", "discount", "fromName", "fromInfo", "toName", "toInfo", "paymentInfo", "notes"];
+
+    function fmtMoney(val, cur) {
+      const n = Number(val || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      const sym = { USD: "$", CNY: "¥", EUR: "€", GBP: "£" }[cur];
+      return sym ? `${sym}${n}` : `${n} ${cur}`;
+    }
+
+    function syncInputs() {
+      fields.forEach((k) => { el(k).value = state[k] ?? ""; });
+      const box = el("itemsContainer");
+      box.innerHTML = "";
+      state.items.forEach((it, idx) => {
+        const row = document.createElement("div");
+        row.className = "item-row";
+        row.innerHTML = `
+          <input type="text" placeholder="Item description" value="${String(it.desc).replace(/"/g, "&quot;")}" data-i="${idx}" data-k="desc" />
+          <input type="number" min="0" step="1" value="${it.qty}" data-i="${idx}" data-k="qty" />
+          <input type="number" min="0" step="0.01" value="${it.rate}" data-i="${idx}" data-k="rate" />
+          <button class="del-btn" data-del="${idx}" title="Remove">×</button>
+        `;
+        box.appendChild(row);
+      });
+    }
+
+    function render() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      const L = LABELS[state.lang] || LABELS.en;
+      el("pDocType").textContent = state.docType;
+      el("pSubtitle").textContent = L.subtitles[state.docType] || "";
+      el("lblNo").textContent = L.no;
+      el("lblDate").textContent = L.date;
+      el("lblDue").textContent = L.due;
+      el("lblFrom").textContent = L.from;
+      el("lblTo").textContent = L.to;
+      el("thDesc").textContent = L.desc;
+      el("thQty").textContent = L.qty;
+      el("thRate").textContent = L.rate;
+      el("thAmt").textContent = L.amt;
+      el("lblSub").textContent = L.sub;
+      el("lblDisc").textContent = L.disc;
+      el("lblTotal").textContent = L.total;
+      el("lblPay").textContent = L.pay;
+
+      el("pInvNo").textContent = state.invNo;
+      el("pIssueDate").textContent = state.issueDate;
+      el("pDueDate").textContent = state.dueDate;
+      el("pFromName").textContent = state.fromName;
+      el("pFromInfo").textContent = state.fromInfo;
+      el("pToName").textContent = state.toName;
+      el("pToInfo").textContent = state.toInfo;
+      el("pPayment").textContent = state.paymentInfo;
+      el("pNotes").textContent = state.notes;
+
+      const tbody = el("pItems");
+      tbody.innerHTML = "";
+      let sub = 0;
+      state.items.forEach((it) => {
+        const amt = (Number(it.qty) || 0) * (Number(it.rate) || 0);
+        sub += amt;
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${it.desc.replace(/</g, "&lt;")}</td>
+          <td class="num">${it.qty}</td>
+          <td class="num">${fmtMoney(it.rate, state.currency)}</td>
+          <td class="num">${fmtMoney(amt, state.currency)}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+      const taxRate = Number(state.taxRate) || 0;
+      const taxAmt = sub * (taxRate / 100);
+      const discAmt = Number(state.discount) || 0;
+      const total = Math.max(0, sub + taxAmt - discAmt);
+
+      el("pSub").textContent = fmtMoney(sub, state.currency);
+      el("lblTax").textContent = `${L.tax} (${taxRate}%)`;
+      el("pTax").textContent = fmtMoney(taxAmt, state.currency);
+      el("rowTax").style.display = taxRate > 0 ? "flex" : "none";
+      el("pDisc").textContent = `- ${fmtMoney(discAmt, state.currency)}`;
+      el("rowDisc").style.display = discAmt > 0 ? "flex" : "none";
+      el("pTotal").textContent = fmtMoney(total, state.currency);
+    }
+
+    fields.forEach((k) => {
+      el(k).addEventListener("input", (e) => {
+        state[k] = (k === "taxRate" || k === "discount") ? Number(e.target.value) : e.target.value;
+        render();
+      });
+    });
+
+    el("itemsContainer").addEventListener("input", (e) => {
+      const i = e.target.dataset.i;
+      const k = e.target.dataset.k;
+      if (i !== undefined && k) {
+        state.items[i][k] = k === "desc" ? e.target.value : Number(e.target.value);
+        render();
+      }
+    });
+
+    el("itemsContainer").addEventListener("click", (e) => {
+      const del = e.target.dataset.del;
+      if (del !== undefined) {
+        state.items.splice(Number(del), 1);
+        syncInputs();
+        render();
+      }
+    });
+
+    el("btnAddItem").addEventListener("click", () => {
+      state.items.push({ desc: state.lang === "zh" ? "新增服务项目" : "Additional Service", qty: 1, rate: 100 });
+      syncInputs();
+      render();
+    });
+
+    el("btnLang").addEventListener("click", () => {
+      const next = state.lang === "zh" ? "en" : "zh";
+      state = structuredClone(DEFAULTS[next]);
+      syncInputs();
+      render();
+    });
+
+    el("btnExportJson").addEventListener("click", () => {
+      const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `${state.invNo || "invoice"}.json`;
+      a.click();
+    });
+
+    el("btnImportJson").addEventListener("click", () => el("jsonFile").click());
+    el("jsonFile").addEventListener("change", (e) => {
+      const f = e.target.files[0];
+      if (!f) return;
+      const r = new FileReader();
+      r.onload = () => {
+        try {
+          const parsed = JSON.parse(r.result);
+          if (parsed && Array.isArray(parsed.items)) {
+            state = parsed;
+            syncInputs();
+            render();
+          }
+        } catch {}
+      };
+      r.readAsText(f);
+    });
+
+    el("btnOpenTip").addEventListener("click", () => el("tipDialog").showModal());
+    window.copyText = (txt, btn) => {
+      navigator.clipboard.writeText(txt);
+      const old = btn.textContent;
+      btn.textContent = "已复制";
+      setTimeout(() => btn.textContent = old, 1400);
+    };
+
+    syncInputs();
+    render();
+  </script>
+</body>
+</html>
